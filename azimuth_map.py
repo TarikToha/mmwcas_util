@@ -4,7 +4,7 @@ from param import *
 from radar_utility import *
 
 # cases = range(320, 330)
-cases = [398]
+cases = [399]
 # matplotlib.use('Qt5Agg')
 base_dir = '/home/ttoha12/crowd/dataset/'
 
@@ -14,7 +14,7 @@ for capture_id in cases:
     data_dir = f'{base_dir}crowd_dataset-capture_{capture_id:05d}-cascaded/'
     resume_path = f'{data_dir}frames/azi_fft_{capture_id}.npy'
 
-    if os.path.exists(resume_path):
+    if not os.path.exists(resume_path):
         # nF/nVx/nC/nS
         frames = read_frames(data_dir, start_frame, end_frame, calibration=True)
         print('frames.shape =', frames.shape, time.time() - start_time, frames.dtype, frames.nbytes / 2 ** 20)

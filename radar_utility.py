@@ -85,14 +85,15 @@ def run_scp(remote_path, local_path, start_time):
 
 
 def download_files(remote_dir, local_dir, files, start_time):
-    if not os.path.exists(local_dir):
-        os.makedirs(local_dir)
-    else:
-        print('data file exists')
-        return
+    os.makedirs(local_dir, exist_ok=True)
 
     thread = []
     for file in files:
+        local_path = f'{local_dir}{file}'
+        if os.path.exists(local_path):
+            print(f'{local_path} exists')
+            continue
+
         t = Thread(target=run_scp, args=(f'{remote_dir}{file}', local_dir, start_time))
         t.start()
         thread.append(t)
