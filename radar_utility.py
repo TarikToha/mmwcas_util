@@ -5,13 +5,13 @@ from threading import Thread
 
 import numpy as np
 import scipy
-from mmwave import dsp
 from scipy import constants
 from tqdm import tqdm
 
 np.random.seed(0)
 np.set_printoptions(suppress=True)
 
+# radar config dictionary
 config = {
     'adc_per_chirp': 256,
     'chirp_per_loop': 12,
@@ -29,28 +29,6 @@ TI_CASCADED_RX_POSITION_ELEV = np.zeros(TI_CASCADED_RX_POSITION_AZI.shape, dtype
 
 TI_CASCADED_TX_ID = [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
 TI_CASCADED_RX_ID = [12, 13, 14, 15, 0, 1, 2, 3, 8, 9, 10, 11, 4, 5, 6, 7]
-
-ground_truth = np.zeros(316, dtype=np.int16)
-# One Person: 115, 240-251
-ground_truth[115], ground_truth[240:252] = 1, 1
-# Two Persons: 41-91, 93-113, 193-216
-ground_truth[41:92], ground_truth[93:114], ground_truth[193:217] = 2, 2, 2
-# Three Persons: 120-127, 149-153, 155-185, 186-191, 217-239
-(ground_truth[120:128], ground_truth[149:154], ground_truth[155:186],
- ground_truth[186:192], ground_truth[217:240]) = 3, 3, 3, 3, 3
-# Four Persons: 129-146, 147-148
-ground_truth[129:147], ground_truth[147:149] = 4, 4
-
-# Two Persons: 253-258, 265-267, 312-315
-ground_truth[253:259], ground_truth[265:268], ground_truth[312:316] = 2, 2, 2
-# Three Persons: 259-264, 304-311
-ground_truth[259:265], ground_truth[304:312] = 3, 3
-# Four Persons: 268-269, 297-303
-ground_truth[268:270], ground_truth[297:304] = 4, 4
-# Five Persons: 270, 285-296
-ground_truth[270:271], ground_truth[285:297] = 5, 5
-# Seven Persons: 271-284
-ground_truth[271:285] = 7
 
 
 def get_frames_count(idx_path):
@@ -174,22 +152,6 @@ def get_azimuth_fft(elev_azi_data, n=None):
     return azi_fft
 
 
-def get_elevation_fft(azi_fft, n=None):
-    elev_fft = azi_fft.copy()
-    elev_fft *= np.hanning(elev_fft.shape[-4]).reshape(-1, 1, 1, 1)
-    elev_fft = scipy.fft.fft(elev_fft, n=n, axis=-4)
-    elev_fft = scipy.fft.fftshift(elev_fft, axes=-4)
-    return elev_fft
-
-
-def get_frame_fft(frame_cube, n=None):
-    # frame_fft = frame_cube.copy()
-    frame_fft = frame_cube - frame_cube.mean(axis=-1, keepdims=True)
-    frame_fft *= np.hanning(frame_fft.shape[-1])
-    frame_fft = scipy.fft.fft(frame_fft, n=n, axis=-1)
-    return frame_fft
-
-
 def get_unique_antenna():
     # Stacking TX
     tx_pos_azi = TI_CASCADED_TX_POSITION_AZI[TI_CASCADED_TX_ID]
@@ -226,151 +188,8 @@ def get_unique_azimuth_data(dop_fft):
     return azi_data
 
 
-def get_peaks(data):
-    x_det = np.apply_along_axis(func1d=dsp.ca, axis=0, arr=data.T,
-                                l_bound=5, guard_len=4, noise_len=16)
-    y_thresh, y_noise = np.apply_along_axis(func1d=dsp.ca_, axis=0, arr=data,
-                                            l_bound=5, guard_len=4, noise_len=16)
-    y_det = data > y_thresh
-    mask = y_det & x_det.T
-    peaks = np.argwhere(mask)
-    vals = data[peaks[:, 0], peaks[:, 1]]
-    snr = vals / y_noise[peaks[:, 0], peaks[:, 1]]
-    peaks = np.column_stack((peaks, vals, snr))
-    return peaks
-
-
-def bin2polar(range_idx, azi_idx, range_bin_size, max_azi_bins):
-    r = range_idx * range_bin_size
-    phases = np.linspace(-np.pi, np.pi, max_azi_bins)
-    azi_idx = azi_idx.astype(np.int16)
-    theta = np.arcsin(phases[azi_idx] / (2 * np.pi * 0.5129))
-    return r, theta
-
-
-def polar2cartesian(r, theta):
-    x = r * np.cos(theta)
-    y = r * np.sin(theta)
-    return x, y
-
-
-def polar2cartesian3d(r, theta, phi):
-    x = r * np.sin(-theta) * np.cos(phi)
-    y = r * np.cos(-theta) * np.cos(phi)
-    z = r * np.sin(-phi)
-    return x, y, z
-
-
-def remove_ghost_points(pts, range_bin_size, max_azi_bins, min_range_dist, max_azi_dist):
-    pts = pts[pts[:, 2] > 1]
-    azi_idx, range_idx = pts[:, 0], pts[:, 1]
-    r, theta = bin2polar(range_idx, azi_idx, range_bin_size, max_azi_bins)
-    xs, ys = polar2cartesian(r, theta)
-    pts, ys = pts[xs > min_range_dist], ys[xs > min_range_dist]
-    pts = pts[abs(ys) < max_azi_dist]
-    return pts
-
-
-def get_vital_sources(ic_data, freq_list, freq_type, max_bf, min_bs, debug):
-    # freq_sources = ic_data.copy()
-    freq_sources = ic_data * np.hanning(ic_data.shape[-1])
-    freq_sources = scipy.fft.fft(freq_sources, axis=-1)
-    freq_sources = np.abs(freq_sources) ** 2
-
-    freq_sources = freq_sources[:, :freq_sources.shape[-1] // 2]
-    # print(freq_sources.shape)
-
-    freq_weight = freq_sources.max(axis=-1) / freq_sources.sum(axis=-1)
-    if debug:
-        print(freq_weight)
-
-    # freq_weight = np.zeros(freq_sources.shape[0])
-    # for idx, ic in enumerate(freq_sources):
-    #     freq_peaks, _ = scipy.signal.find_peaks(ic)
-    #     if freq_peaks.size == 0:
-    #         continue
-    #
-    #     freq_peaks = ic[freq_peaks]
-    #     freq_weight[idx] = freq_peaks.max() / freq_peaks.sum()
-    #
-    # print(freq_weight)
-
-    if freq_type == 'peak':
-        freq_peaks = np.argmax(freq_sources, axis=-1)
-        freq_peaks = freq_list[freq_peaks]
-    else:
-        freq_peaks = np.sum(freq_list * freq_sources, axis=-1) / np.sum(freq_sources, axis=-1)
-
-    if debug:
-        print(freq_peaks)
-
-    vital_sources = (0.1 <= freq_peaks) & (freq_peaks <= max_bf) & (freq_weight >= min_bs)
-
-    if debug:
-        print(freq_type, max_bf, min_bs)
-
-    vital_peaks, vital_weight = freq_peaks[vital_sources], freq_weight[vital_sources]
-    return freq_sources, vital_sources, vital_weight
-
-
 def clean_heatmap(fft_in, q):
     data = fft_in.copy()
     vmin = np.percentile(data, q)
     data[data < vmin] = vmin
-    return data
-
-
-def get_steering_vec(ang_est_range, ang_est_resolution, num_ant):
-    num_vec = 2 * ang_est_range / ang_est_resolution
-    num_vec = int(round(num_vec))
-    steering_vectors = np.zeros((num_vec, num_ant), dtype=np.complex64)
-    for kk in range(num_vec):
-        for jj in range(num_ant):
-            theta = -1 * np.pi * jj * np.sin((-ang_est_range + kk * ang_est_resolution) * np.pi / 180)
-            real = np.cos(theta)
-            imag = np.sin(theta)
-            steering_vectors[kk, jj] = real + 1j * imag
-
-    return num_vec, steering_vectors
-
-
-def cov_matrix(x):
-    Rxx = x @ np.conjugate(x.T)
-    Rxx = np.divide(Rxx, x.shape[1])
-    return Rxx
-
-
-def get_noise_subspace(covariance):
-    _, ev = np.linalg.eigh(covariance)
-    ev = ev[:, :-16]
-    return ev
-
-
-def apply_music_algorithm(vx_chirps, steering_vec):
-    cov = cov_matrix(vx_chirps)
-    noise_subspace = get_noise_subspace(cov)
-    v = noise_subspace.T.conj() @ steering_vec.T
-    spectrum = np.reciprocal(np.sum(v * v.conj(), axis=0).real)
-    return spectrum
-
-
-def pad_data_2d(data_in, bound, axis):
-    data = data_in.copy()
-    gap = bound - data.shape[axis]
-    if axis == 0:
-        data = np.pad(data, ((0, gap), (0, 0)), 'constant')
-    else:
-        data = np.pad(data, ((0, 0), (0, gap)), 'constant')
-    return data
-
-
-def pad_data_3d(data_in, bound, axis):
-    data = data_in.copy()
-    gap = bound - data.shape[axis]
-    if axis == 0:
-        data = np.pad(data, ((0, gap), (0, 0), (0, 0)), 'constant')
-    elif axis == 1:
-        data = np.pad(data, ((0, 0), (0, gap), (0, 0)), 'constant')
-    else:
-        data = np.pad(data, ((0, 0), (0, 0), (0, gap)), 'constant')
     return data

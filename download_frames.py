@@ -1,7 +1,9 @@
-from radar_utility import *
+import time
 
-cases = range(430, 440)
-# cases = [399]
+from radar_utility import download_files
+
+cases = [400]
+# cases = range(440, 450)
 remote_files = ['master_0000_idx.bin', 'master_0000_data.bin', 'slave1_0000_data.bin',
                 'slave2_0000_data.bin', 'slave3_0000_data.bin']
 

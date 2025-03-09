@@ -3,10 +3,11 @@ from matplotlib import pyplot as plt
 from param import *
 from radar_utility import *
 
-# cases = range(320, 330)
-cases = [399]
+cases = range(440, 450)
+# cases = [398]
 # matplotlib.use('Qt5Agg')
 base_dir = '/home/ttoha12/crowd/dataset/'
+show = False
 
 for capture_id in cases:
     start_time = time.time()
@@ -45,11 +46,9 @@ for capture_id in cases:
     azi_fft = clean_heatmap(azi_fft, 50)
     print('azi_fft.shape =', azi_fft.shape, time.time() - start_time, azi_fft.dtype)
 
-    # for frame_id in range(azi_fft.shape[0]):
-    plt.title(f'Case-{capture_id}')
-    plt.imshow(azi_fft[0])
-    plt.show()
-    # plt.savefig(f'out/{capture_id}_{frame_id}.png')
-    # plt.close()
+    if show:
+        plt.title(f'Case-{capture_id}')
+        plt.imshow(azi_fft[0])
+        plt.show()
 
-    print(capture_id, time.time() - start_time)
+    print(capture_id, time.time() - start_time, '\n')

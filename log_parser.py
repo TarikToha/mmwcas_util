@@ -1,7 +1,7 @@
 import json
 import os.path
 
-cases = range(300, 400)
+cases = range(434, 445)
 # cases = [316]
 base_dir = '/home/ttoha12/crowd/dataset/'
 
@@ -16,4 +16,4 @@ for capture_id in cases:
         capture_log = file.readlines()
         capture_log = json.loads(capture_log[-1])['text']
         capture_log = capture_log.split('|')[0]
-        print(capture_id, capture_log)
+        print(capture_id, '\t', capture_log)

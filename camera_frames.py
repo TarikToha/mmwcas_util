@@ -3,7 +3,7 @@ import shutil
 
 base_dir = '/home/ttoha12/crowd/dataset/'
 cases = range(500)
-save = False
+save = True
 
 for capture_id in cases:
     in_path = f'{base_dir}capture_{capture_id:05d}/capture_{capture_id:05d}_color.jpg'
@@ -14,4 +14,4 @@ for capture_id in cases:
     if save:
         shutil.copy2(in_path, out_dir)
 
-    print(capture_id)
+    print(capture_id, save)
