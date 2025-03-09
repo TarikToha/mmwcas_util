@@ -11,7 +11,12 @@ from tqdm import tqdm
 np.random.seed(0)
 np.set_printoptions(suppress=True)
 
-# radar config dictionary
+"""
+Radar configuration parameters.
+
+Defines key settings for radar signal processing, including ADC sampling,
+chirp structure, receiver channels, and waveform details.
+"""
 config = {
     'adc_per_chirp': 256,
     'chirp_per_loop': 12,
@@ -21,6 +26,13 @@ config = {
     'num_of_waves': 2
 }
 
+"""
+Defines the virtual antenna array configuration for a cascaded mmWave radar system.
+
+Based on section 2.6.3 "Virtual Antenna Array" from TI document SWRU553A.
+These arrays define the azimuth and elevation positions of the transmit (TX) 
+and receive (RX) antennas in a cascaded radar setup.
+"""
 # See: 2.6.3 Virtual Antenna Array, SWRU553A
 TI_CASCADED_TX_POSITION_AZI = np.array([11, 10, 9, 32, 28, 24, 20, 16, 12, 8, 4, 0])
 TI_CASCADED_TX_POSITION_ELEV = np.array([6, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0])
@@ -32,6 +44,15 @@ TI_CASCADED_RX_ID = [12, 13, 14, 15, 0, 1, 2, 3, 8, 9, 10, 11, 4, 5, 6, 7]
 
 
 def get_frames_count(idx_path):
+    """
+    Reads the number of frames from an index file.
+
+    Args:
+        idx_path (str): Path to the index binary file.
+
+    Returns:
+        int: Number of frames in the dataset.
+    """
     dt = np.dtype([
         ("tag", np.uint32),
         ("version", np.uint32),
@@ -45,6 +66,19 @@ def get_frames_count(idx_path):
 
 
 def get_iq_data_per_chip(data_path, frame_id, samples_per_frame, config):
+    """
+    Extracts in-phase (I) and quadrature (Q) data for a specific radar frame.
+
+    Args:
+        data_path (str): Path to the binary data file.
+        frame_id (int): Index of the frame to extract.
+        samples_per_frame (int): Total number of samples per frame.
+        config (dict): Radar configuration dictionary.
+
+    Returns:
+        np.ndarray: Extracted IQ data with shape
+                    (chirp_per_loop, rx_per_device, num_of_loops, adc_per_chirp, 2).
+    """
     data_per_chip = np.fromfile(data_path, dtype=np.int16,
                                 count=samples_per_frame, offset=frame_id * samples_per_frame * 2)
     in_phase, quadrature = data_per_chip[::2], data_per_chip[1::2]
@@ -58,11 +92,28 @@ def get_iq_data_per_chip(data_path, frame_id, samples_per_frame, config):
 
 
 def run_scp(remote_path, local_path, start_time):
+    """
+    Transfers a file from the mmWave radar's DSP board to a local machine using SCP.
+
+    Args:
+        remote_path (str): Full path to the file on the DSP board.
+        local_path (str): Destination path on the local machine.
+        start_time (float): Timestamp for tracking transfer duration.
+    """
     subprocess.run(['scp', remote_path, local_path])
     print(remote_path, time.time() - start_time)
 
 
 def download_files(remote_dir, local_dir, files, start_time):
+    """
+    Downloads multiple radar data files from an mmWave radar's DSP board using SCP in parallel threads.
+
+    Args:
+        remote_dir (str): The directory path on the mmWave radar's DSP board containing the data files.
+        local_dir (str): The local directory where the files will be saved.
+        files (list): A list of file names to be downloaded.
+        start_time (float): The timestamp marking the start of the download process.
+    """
     os.makedirs(local_dir, exist_ok=True)
 
     thread = []
@@ -81,6 +132,19 @@ def download_files(remote_dir, local_dir, files, start_time):
 
 
 def read_frames(data_dir, start_frame, end_frame, skip_frame=0, calibration=True):
+    """
+    Loads and processes radar frames from stored NumPy files.
+
+    Args:
+        data_dir (str): Directory containing the radar frames.
+        start_frame (int): Index of the first frame to read.
+        end_frame (int): Index of the last frame to read.
+        skip_frame (int, optional): Number of frames to skip between reads. Defaults to 0.
+        calibration (bool, optional): If True, applies calibration correction. Defaults to True.
+
+    Returns:
+        np.ndarray: Complex radar data with shape (nF, nTx*nRx, nC, nS).
+    """
     total_frames = end_frame - start_frame + 1
 
     # nF/nTx/nRx/nC/nS
@@ -101,6 +165,12 @@ def read_frames(data_dir, start_frame, end_frame, skip_frame=0, calibration=True
 
 
 def get_calibration_constant():
+    """
+    Computes the calibration constant for range correction.
+
+    Returns:
+       np.ndarray: Frequency bias factor for calibration.
+    """
     slope = 7.8e13
     rate = 5.6e6
     adc = 256
@@ -118,6 +188,16 @@ def get_calibration_constant():
 
 
 def get_range_fft(frames, n=None):
+    """
+    Computes the Range FFT of radar frames.
+
+    Args:
+        frames (np.ndarray): Input radar frames.
+        n (int, optional): FFT length. Defaults to None.
+
+    Returns:
+        np.ndarray: Range FFT output.
+    """
     # DC offset compensation
     range_fft = frames - frames.mean(axis=-1, keepdims=True)
     # Range-domain windowing
@@ -128,6 +208,18 @@ def get_range_fft(frames, n=None):
 
 
 def get_doppler_fft(range_fft, n=None, dc_offset=None):
+    """
+    Computes the Doppler FFT of range-transformed data.
+
+    Args:
+        range_fft (np.ndarray): FFT-transformed range data.
+        n (int, optional): FFT length. Defaults to None.
+        dc_offset (bool, optional): If True, compensates for DC offset across all frames.
+                                    If False, compensates within each Doppler bin. Defaults to None.
+
+    Returns:
+        np.ndarray: Doppler FFT output.
+    """
     # Zero doppler compensation
     if dc_offset is None:
         dop_fft = range_fft.copy()
@@ -145,6 +237,16 @@ def get_doppler_fft(range_fft, n=None, dc_offset=None):
 
 
 def get_azimuth_fft(elev_azi_data, n=None):
+    """
+    Computes the Azimuth FFT of radar elevation-azimuth data.
+
+    Args:
+        elev_azi_data (np.ndarray): Input data with elevation and azimuth information.
+        n (int, optional): FFT length. Defaults to None.
+
+    Returns:
+        np.ndarray: Azimuth FFT output.
+    """
     azi_fft = elev_azi_data.copy()
     azi_fft *= np.hanning(azi_fft.shape[-3]).reshape(-1, 1, 1)
     azi_fft = scipy.fft.fft(azi_fft, n=n, axis=-3)
@@ -153,6 +255,12 @@ def get_azimuth_fft(elev_azi_data, n=None):
 
 
 def get_unique_antenna():
+    """
+    Identifies unique virtual antenna positions for azimuth processing.
+
+    Returns:
+        np.ndarray: A mapping of unique elevation and azimuth antenna positions.
+    """
     # Stacking TX
     tx_pos_azi = TI_CASCADED_TX_POSITION_AZI[TI_CASCADED_TX_ID]
     tx_pos_elev = TI_CASCADED_TX_POSITION_ELEV[TI_CASCADED_TX_ID]
@@ -180,6 +288,15 @@ def get_unique_antenna():
 
 
 def get_unique_azimuth_data(dop_fft):
+    """
+    Extracts unique azimuth data from Doppler FFT output.
+
+    Args:
+        dop_fft (np.ndarray): Doppler FFT data.
+
+    Returns:
+        np.ndarray: Processed azimuth data with unique antenna positions.
+    """
     elev_azi_pos = get_unique_antenna()
     azi_pos = elev_azi_pos[0]
     azi_idx = np.argwhere(azi_pos != -1)
@@ -189,6 +306,16 @@ def get_unique_azimuth_data(dop_fft):
 
 
 def clean_heatmap(fft_in, q):
+    """
+    Applies percentile-based thresholding to clean a heatmap.
+
+    Args:
+        fft_in (np.ndarray): Input heatmap data (e.g., FFT output).
+        q (float): Percentile threshold (0-100). Values below this percentile are set to the threshold.
+
+    Returns:
+        np.ndarray: Processed heatmap with low values clipped.
+    """
     data = fft_in.copy()
     vmin = np.percentile(data, q)
     data[data < vmin] = vmin

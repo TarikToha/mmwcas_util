@@ -1,3 +1,6 @@
+"""
+Downloads radar data from an mmWave radar's DSP board via SCP.
+"""
 import time
 
 from radar_utility import download_files
@@ -8,6 +11,7 @@ remote_files = ['master_0000_idx.bin', 'master_0000_data.bin', 'slave1_0000_data
                 'slave2_0000_data.bin', 'slave3_0000_data.bin']
 
 for capture_id in cases:
+    """Downloads radar data for a given capture case."""
     start_time = time.time()
     print(capture_id, start_time)
 

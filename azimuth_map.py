@@ -1,3 +1,9 @@
+"""
+Processes and visualizes radar data from locally stored mmWave radar files.
+
+This script reads, transforms, and saves radar frames by computing range, Doppler,
+and azimuth FFTs. If processed data already exists, it loads and visualizes it.
+"""
 from matplotlib import pyplot as plt
 
 from param import *

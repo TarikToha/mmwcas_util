@@ -1,3 +1,9 @@
+"""
+Processes and saves radar frames from locally stored mmWave radar data.
+
+Reads raw IQ data from binary files, reshapes it into structured frames,
+and stores each frame as a NumPy file for further analysis.
+"""
 import os
 import time
 
