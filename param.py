@@ -1,6 +1,14 @@
-max_range_bins = 140
-max_dop_bins = 128
-max_azi_bins = 128
+"""
+Radar Processing Constants
 
-start_frame = 0
-end_frame = 59  # including
+Defines key parameters for radar data processing, including:
+- Maximum bins for range, Doppler, and azimuth
+- Frame indexing for processing
+"""
+
+max_range_bins: int = 140  # Maximum number of range bins
+max_dop_bins: int = 128  # Maximum number of Doppler bins
+max_azi_bins: int = 128  # Maximum number of azimuth bins
+
+start_frame: int = 0  # First frame index
+end_frame: int = 59  # Last frame index (inclusive)
