@@ -2,7 +2,7 @@
 Script to download radar data from an mmWave radar's DSP board via SCP.
 
 This script connects to the DSP board over SSH and transfers the specified radar
-data files to a local directory using `download_files.py` from `radar_utility.py`.
+data files to a local directory using `download_files` from `radar_utility.py`.
 
 Usage:
     - Modify `cases` to specify the capture IDs to download.
