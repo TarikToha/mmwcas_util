@@ -21,15 +21,32 @@ Attributes:
 
 import os
 import time
+from threading import Thread
 
 import numpy as np
 from tqdm import tqdm
 
 from radar_utility import get_frames_count, config, get_iq_data_per_chip
 
+
+def make_frame(frame_id):
+    r = 0
+    for dp in remote_files[1:]:
+        data_per_chip = get_iq_data_per_chip(
+            local_dir + dp, frame_id, samples_per_frame, config
+        )
+        frame[:, r:r + 4] = data_per_chip
+        r += 4
+
+    # Save the processed frame as a NumPy file
+    out_file = f'{frames_dir}frame_{frame_id}.npy'
+    np.save(out_file, frame)
+
+
 # Define capture IDs to process
-cases = range(440, 450)
-# cases = [399]
+cases = [287]
+# cases = range(280, 290)
+dataset_dir = 'wall_dataset'
 
 # List of required binary files
 remote_files = [
@@ -55,8 +72,12 @@ for capture_id in cases:
     print(f"Processing capture ID: {capture_id}, Start time: {start_time}")
 
     # Define local directories for storage
-    local_dir = f'/home/ttoha12/crowd/dataset/crowd_dataset-capture_{capture_id:05d}-cascaded/'
+    local_dir = f'/home/ttoha12/{dataset_dir}/{dataset_dir}-capture_{capture_id:05d}-cascaded/'
     frames_dir = f'{local_dir}frames/'
+
+    if not os.path.exists(local_dir):
+        print(f'{local_dir} does not exist')
+        continue
 
     # Get total number of frames from the index file
     num_of_frames = get_frames_count(local_dir + remote_files[0])
@@ -89,17 +110,13 @@ for capture_id in cases:
     )
 
     # Process each frame and store the reshaped data
-    for frame_id in tqdm(range(num_of_frames), desc="Processing frames"):
-        r = 0
-        for dp in remote_files[1:]:
-            data_per_chip = get_iq_data_per_chip(
-                local_dir + dp, frame_id, samples_per_frame, config
-            )
-            frame[:, r:r + 4] = data_per_chip
-            r += 4
+    thread_list = []
+    for f_id in range(num_of_frames):
+        t = Thread(target=make_frame, args=(f_id,))
+        t.start()
+        thread_list.append(t)
 
-        # Save the processed frame as a NumPy file
-        out_file = f'{frames_dir}frame_{frame_id}.npy'
-        np.save(out_file, frame)
+    for t in tqdm(thread_list, desc="joining threads"):
+        t.join()
 
-    print(f"Capture {capture_id} processed in {time.time() - start_time:.2f} seconds.")
+    print(f"Capture {capture_id} processed in {time.time() - start_time:.2f} seconds\n")

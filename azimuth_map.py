@@ -28,13 +28,16 @@ from matplotlib import pyplot as plt
 from param import *
 from radar_utility import *
 
-# Define capture IDs to process
-cases = range(440, 450)
-# cases = [398]
-
-# Base directory for dataset storage
-base_dir = '/home/ttoha12/crowd/dataset/'
-show = False  # Set to True to visualize azimuth FFT output
+cases = [260]
+# cases = range(230, 260)
+# cases = range(int(sys.argv[1]), int(sys.argv[2]))
+dataset_dir = 'wall_dataset'
+base_dir = f'/home/ttoha12/{dataset_dir}/'
+show = True
+frame_id = 30
+save = False
+if save:
+    os.makedirs('figures', exist_ok=True)
 
 for capture_id in cases:
     """
@@ -64,7 +67,7 @@ for capture_id in cases:
     print(f"Processing capture {capture_id}...")
 
     # Define local file paths
-    data_dir = f"{base_dir}crowd_dataset-capture_{capture_id:05d}-cascaded/"
+    data_dir = f"{base_dir}{dataset_dir}-capture_{capture_id:05d}-cascaded/"
     resume_path = f"{data_dir}frames/azi_fft_{capture_id}.npy"
 
     if not os.path.exists(resume_path):
@@ -105,8 +108,21 @@ for capture_id in cases:
 
     # Visualization (if enabled)
     if show:
-        plt.title(f"Case-{capture_id}")
-        plt.imshow(azi_fft[0])
+        plt.rcParams.update({'font.size': 16, 'axes.linewidth': 2,
+                             'xtick.major.size': 10, 'xtick.major.width': 2,
+                             'ytick.major.size': 10, 'ytick.major.width': 2})
+
+        fig = plt.figure(figsize=(12, 9))
+        ax = fig.add_subplot()
+        col = ax.imshow(azi_fft[frame_id], aspect='auto', cmap='jet')
+        ax.set_title(f"Case-{capture_id} Frame-{frame_id}")
+        ax.set_xlabel("Range Bins")
+        ax.set_ylabel("Azimuth Bins")
+        fig.colorbar(col, label='Reflection Intensity')
+        fig.tight_layout()
+        if save:
+            plt.savefig(f'figures/azi_fft_{capture_id}_{frame_id}.jpg',
+                        dpi=300, bbox_inches='tight', pad_inches=0.1)
         plt.show()
 
-    print(f"Capture {capture_id} processed in {time.time() - start_time:.2f} seconds.\n")
+    print(f"Capture {capture_id} processed in {time.time() - start_time:.2f} seconds")

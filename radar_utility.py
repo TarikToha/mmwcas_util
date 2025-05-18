@@ -5,6 +5,8 @@ from threading import Thread
 
 import numpy as np
 import scipy
+from scipy import constants
+from tqdm import tqdm
 
 np.random.seed(0)
 np.set_printoptions(suppress=True)
@@ -115,6 +117,71 @@ def download_files(remote_dir: str, local_dir: str, files: list, start_time: flo
         t.join()
 
 
+def read_frames(data_dir, start_frame, end_frame, skip_frame=0, calibration=True):
+    """
+    Reads and processes radar frames from stored NumPy files.
+
+    Args:
+        data_dir (str): Path to the directory containing radar frame files.
+        start_frame (int): Index of the first frame to read.
+        end_frame (int): Index of the last frame to read.
+        skip_frame (int, optional): Number of frames to skip between reads. Defaults to 0.
+        calibration (bool, optional): If True, applies calibration correction. Defaults to True.
+
+    Returns:
+        np.ndarray: Complex radar data with shape (nF, nTx*nRx, nC, nS).
+    """
+    total_frames = end_frame - start_frame + 1
+
+    # Initialize an empty array to store radar frames
+    # nF/nTx/nRx/nC/nS
+    frames = np.zeros((total_frames, config['chirp_per_loop'], config['rx_per_device'] * 4,
+                       config['num_of_loops'], config['adc_per_chirp']), dtype=np.complex64)
+
+    # Load and process each frame
+    for frame_id in tqdm(range(start_frame, end_frame + 1, skip_frame + 1)):
+        frame_path = f'{data_dir}frames/frame_{frame_id}.npy'
+        frame = np.load(frame_path)
+        frame = frame[:, :, :, :, 0] + 1j * frame[:, :, :, :, 1]
+        frames[frame_id - start_frame] = frame
+        # print(frame_id, frame.shape)
+
+    # Apply calibration correction if required
+    if calibration:
+        frames *= get_calibration_constant()
+
+    # Reshape to match expected dimensions
+    # nF/nTx/nRx/nC/nS
+    frames = frames.reshape((frames.shape[0], -1, frames.shape[3], frames.shape[4]))
+    return frames
+
+
+def get_calibration_constant():
+    """
+    Computes the calibration constant for range correction.
+
+    Returns:
+       np.ndarray: Frequency bias factor for calibration.
+    """
+    slope = 7.8e13  # Frequency slope of chirps
+    rate = 5.6e6  # Sampling rate
+    adc = 256  # Number of ADC samples per chirp
+
+    f = np.arange(adc) * slope / rate
+    f = f.reshape((1, 1, 1, 1, 1, adc))
+
+    # Compute range-dependent phase offset
+    range_offset_mm = 100  # Range offset in millimeters
+    delay_offset = range_offset_mm / 1e3 * 2 / constants.c  # Convert to time delay
+    delay_offsets = np.full((192, 1), delay_offset)
+
+    # Compute frequency bias factor
+    freq_bias_factor = np.exp(-1j * 2 * np.pi * delay_offsets * f)
+    freq_bias_factor = freq_bias_factor.reshape((1, 12, 16, 1, adc))
+
+    return freq_bias_factor
+
+
 def get_range_fft(frames: np.ndarray, n: int = None) -> np.ndarray:
     """
     Computes the Range FFT of radar frames.
@@ -156,6 +223,75 @@ def get_doppler_fft(range_fft: np.ndarray, n: int = None, dc_offset: bool = None
     dop_fft = scipy.fft.fft(dop_fft, n=n, axis=-2)
     dop_fft = scipy.fft.fftshift(dop_fft, axes=-2)
     return dop_fft
+
+
+def get_azimuth_fft(elev_azi_data, n=None):
+    """
+    Computes the Azimuth FFT of radar elevation-azimuth data.
+
+    Args:
+        elev_azi_data (np.ndarray): Input data with elevation and azimuth information.
+        n (int, optional): FFT length. Defaults to None.
+
+    Returns:
+        np.ndarray: Azimuth FFT output.
+    """
+    azi_fft = elev_azi_data.copy()
+    azi_fft *= np.hanning(azi_fft.shape[-3]).reshape(-1, 1, 1)
+    azi_fft = scipy.fft.fft(azi_fft, n=n, axis=-3)
+    azi_fft = scipy.fft.fftshift(azi_fft, axes=-3)
+    return azi_fft
+
+
+def get_unique_antenna():
+    """
+    Identifies unique virtual antenna positions for azimuth processing.
+
+    Returns:
+        np.ndarray: A mapping of unique elevation and azimuth antenna positions.
+    """
+    # Stacking TX
+    tx_pos_azi = TI_CASCADED_TX_POSITION_AZI[TI_CASCADED_TX_ID]
+    tx_pos_elev = TI_CASCADED_TX_POSITION_ELEV[TI_CASCADED_TX_ID]
+    tx_pos = np.column_stack((tx_pos_azi, tx_pos_elev))
+
+    # Stacking RX
+    rx_pos_azi = TI_CASCADED_RX_POSITION_AZI[TI_CASCADED_RX_ID]
+    rx_pos_elev = TI_CASCADED_RX_POSITION_ELEV[TI_CASCADED_RX_ID]
+    rx_pos = np.column_stack((rx_pos_azi, rx_pos_elev))
+
+    # Stacking virtual channel
+    tx_pos = tx_pos.reshape((config['chirp_per_loop'], 1, 2))
+    rx_pos = rx_pos.reshape((1, config['rx_per_device'] * 4, 2))
+    ant_pos = tx_pos + rx_pos
+    ant_pos = ant_pos.reshape((-1, 2))
+    ant_idx = np.arange(ant_pos.shape[0])
+
+    elev_azi_pos = np.full(ant_pos.max(axis=0) + 1, -1).T
+    for elev in range(elev_azi_pos.shape[0]):
+        azi_idx = np.where(ant_pos[:, 1] == elev)[0]
+        unique_pos, unique_idx = np.unique(ant_pos[azi_idx][:, 0], axis=0, return_index=True)
+        elev_azi_pos[elev, unique_pos] = ant_idx[azi_idx][unique_idx]
+
+    return elev_azi_pos
+
+
+def get_unique_azimuth_data(dop_fft):
+    """
+    Extracts unique azimuth data from Doppler FFT output.
+
+    Args:
+        dop_fft (np.ndarray): Doppler FFT data.
+
+    Returns:
+        np.ndarray: Processed azimuth data with unique antenna positions.
+    """
+    elev_azi_pos = get_unique_antenna()
+    azi_pos = elev_azi_pos[0]
+    azi_idx = np.argwhere(azi_pos != -1)
+    azi_data = np.zeros((dop_fft.shape[0], 86, dop_fft.shape[-2], dop_fft.shape[-1]), dtype=np.complex64)
+    azi_data[:, azi_idx] = dop_fft[:, azi_pos[azi_idx]]
+    return azi_data
 
 
 def clean_heatmap(fft_in: np.ndarray, q: float) -> np.ndarray:

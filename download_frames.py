@@ -23,8 +23,9 @@ import time
 from radar_utility import download_files
 
 # List of capture case IDs to download
-cases = [400]  # Modify this list as needed
-# cases = range(440, 450)  # Example: Download a range of captures
+# cases = [8, 9]
+cases = range(50, 60)  # Example: Download a range of captures
+dataset_dir = 'wall_dataset'
 
 # List of radar data files to transfer
 remote_files = [
@@ -60,8 +61,8 @@ for capture_id in cases:
     print(f"Downloading data for capture {capture_id}...")
 
     # Define remote DSP board directory and local save directory
-    remote_dir = f'root@192.168.33.180:/mnt/ssd/crowd_dataset-capture_{capture_id:05d}-cascaded/'
-    local_dir = f'/home/ttoha12/crowd/dataset/crowd_dataset-capture_{capture_id:05d}-cascaded/'
+    remote_dir = f'root@192.168.33.180:/mnt/ssd/{dataset_dir}-capture_{capture_id:05d}-cascaded/'
+    local_dir = f'/home/ttoha12/{dataset_dir}/{dataset_dir}-capture_{capture_id:05d}-cascaded/'
 
     # Initiate the file transfer
     download_files(remote_dir, local_dir, remote_files, start_time)

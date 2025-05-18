@@ -1,9 +1,8 @@
 import json
 import os.path
 
-cases = range(434, 445)
-# cases = [316]
-base_dir = '/home/ttoha12/crowd/dataset/'
+cases = range(0, 10)
+base_dir = '/home/ttoha12/wall_dataset/'
 
 for capture_id in cases:
     capture_log = f'{base_dir}capture_{capture_id:05d}/capture.log'
