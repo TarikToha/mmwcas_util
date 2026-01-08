@@ -1,7 +1,7 @@
 import json
 import os.path
 
-cases = range(0, 10)
+cases = range(200, 300)
 base_dir = '/home/ttoha12/wall_dataset/'
 
 for capture_id in cases:

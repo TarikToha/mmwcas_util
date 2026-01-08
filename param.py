@@ -12,3 +12,5 @@ max_azi_bins: int = 128  # Maximum number of azimuth bins
 
 start_frame: int = 0  # First frame index
 end_frame: int = 59  # Last frame index (inclusive)
+
+discard_cases = [221]

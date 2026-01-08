@@ -28,8 +28,8 @@ from matplotlib import pyplot as plt
 from param import *
 from radar_utility import *
 
-cases = [260]
-# cases = range(230, 260)
+# cases = [260]
+cases = range(280, 290)
 # cases = range(int(sys.argv[1]), int(sys.argv[2]))
 dataset_dir = 'wall_dataset'
 base_dir = f'/home/ttoha12/{dataset_dir}/'
@@ -62,6 +62,10 @@ for capture_id in cases:
     Raises:
         FileNotFoundError: If required radar files are missing.
     """
+
+    if capture_id in discard_cases:
+        print(f"Discarding capture {capture_id}...")
+        continue
 
     start_time = time.time()
     print(f"Processing capture {capture_id}...")

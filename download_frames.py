@@ -23,8 +23,8 @@ import time
 from radar_utility import download_files
 
 # List of capture case IDs to download
-# cases = [8, 9]
-cases = range(50, 60)  # Example: Download a range of captures
+# cases = [221]
+cases = range(250, 290)  # Example: Download a range of captures
 dataset_dir = 'wall_dataset'
 
 # List of radar data files to transfer
